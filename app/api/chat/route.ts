@@ -7,6 +7,11 @@ import { createGroq } from "@ai-sdk/groq"
 
 export const maxDuration = 30
 
+// Warn at module load time so it shows up in deployment logs immediately
+if (!process.env.GROQ_API_KEY) {
+  console.warn("[WARNING] GROQ_API_KEY is not set. Set it in your hosting platform's environment variables.")
+}
+
 export async function POST(req: Request) {
   try {
     // API kalitini tekshirish (xavfsizlik)
