@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 export const metadata: Metadata = {
-  title: 'AI Chat Ilova',
+  title: 'Private Ai ',
   description: "Sun'iy intellekt yordamchisi bilan suhbatlash ilovasi - dasturlash, API integratsiya va xavfsizlik bilimlarini namoyish etish",
   authors: [{ name: 'Asadbek Mirmahmudov' }],
   creator: 'Asadbek Mirmahmudov',
