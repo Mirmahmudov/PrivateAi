@@ -13,22 +13,8 @@ export default function Home() {
 
         <Chat />
 
-        <footer className="text-center text-sm text-muted-foreground space-y-2">
-          <div className="flex flex-wrap justify-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              <span>API integratsiya</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span>Environment variables</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-              <span>Xatolik boshqaruvi</span>
-            </div>
-          </div>
-          <p>Dasturlash, API integratsiya va xavfsizlik bilimlarini namoyish etish uchun yaratilgan</p>
+        <footer className="text-center text-sm text-muted-foreground">
+          <p>© 2026 Barcha huquqlar himoyalangan &quot;MA&quot;</p>
         </footer>
       </div>
     </main>
