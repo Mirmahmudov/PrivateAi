@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Bot, Send, Sparkles, User } from "lucide-react"
+import { Bot, Send, Square, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Message = {
@@ -12,36 +11,62 @@ type Message = {
   content: string
 }
 
+const SUGGESTIONS = [
+  "O'zbek tilida she'r yoz",
+  "JavaScript async/await tushuntir",
+  "Sog'lom ovqatlanish haqida maslahat ber",
+  "Ingliz tilini o'rganishga yordam ber",
+]
+
 export function Chat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, isLoading])
+  }, [messages])
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    const text = input.trim()
-    if (!text || isLoading) return
+  // Auto-resize textarea
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+    e.target.style.height = "auto"
+    e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px"
+  }
 
-    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text }
+  const stopGeneration = () => {
+    abortRef.current?.abort()
+    setIsLoading(false)
+  }
+
+  const handleSubmit = async (text?: string) => {
+    const msg = (text ?? input).trim()
+    if (!msg || isLoading) return
+
+    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: msg }
     const updatedMessages = [...messages, userMsg]
     setMessages(updatedMessages)
     setInput("")
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto"
+    }
     setIsLoading(true)
     setError(null)
 
     const assistantId = crypto.randomUUID()
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }])
 
+    abortRef.current = new AbortController()
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortRef.current.signal,
         body: JSON.stringify({
           messages: updatedMessages.map(({ role, content }) => ({ role, content })),
         }),
@@ -49,144 +74,170 @@ export function Chat() {
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || "Server xatosi")
+        throw new Error(data.error || "Server xatosi yuz berdi")
       }
 
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
-      if (!reader) throw new Error("Stream o'qib bo'lmadi")
+      if (!reader) throw new Error("Javobni o'qib bo'lmadi")
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value)
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + chunk } : m
-          )
+          prev.map((m) => m.id === assistantId ? { ...m, content: m.content + chunk } : m)
         )
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Xatolik yuz berdi")
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return
+      setError(err instanceof Error ? err.message : "Noma'lum xatolik yuz berdi")
       setMessages((prev) => prev.filter((m) => m.id !== assistantId))
     } finally {
       setIsLoading(false)
     }
   }
 
-  const suggestions = ["Kod yozishda yordam", "Tarjima qilish", "Tushuntirish berish"]
-
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] max-w-3xl mx-auto rounded-2xl overflow-hidden border border-border/50 shadow-2xl bg-card">
+    <div className="flex flex-col h-screen max-w-3xl mx-auto w-full">
+
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50 bg-linear-to-r from-violet-500/10 via-purple-500/5 to-transparent">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-linear-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/25">
-          <Sparkles className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <h2 className="font-semibold text-foreground">AI Yordamchi</h2>
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs text-muted-foreground">Llama 3 · 8B</span>
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border/40">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center">
+            <Zap className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <span className="font-semibold text-sm text-foreground">Private AI</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] text-muted-foreground">Llama 3.3 · 70B</span>
+            </div>
           </div>
         </div>
-      </div>
+        <span className="text-[11px] text-muted-foreground/50">by Asadbek Mirmahmudov</span>
+      </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-violet-500/20 to-purple-600/20 flex items-center justify-center border border-violet-500/20">
-              <Bot className="h-10 w-10 text-violet-500" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-lg font-semibold">Salom! Men AI yordamchiman</p>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Istalgan savol yoki mavzu bo&apos;yicha yordam bera olaman
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-8 px-4 pb-8">
+            <div className="text-center space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+                <Bot className="h-8 w-8 text-primary" />
+              </div>
+              <h1 className="text-2xl font-bold text-foreground">Assalomu alaykum!</h1>
+              <p className="text-muted-foreground text-sm max-w-sm">
+                Men sizning shaxsiy AI yordamchingizman. Savol bering yoki quyidagilardan birini tanlang.
               </p>
             </div>
-            <div className="flex flex-wrap justify-center gap-2 mt-2">
-              {suggestions.map((s) => (
+            <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+              {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
-                  onClick={() => setInput(s)}
-                  className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-violet-500/50 hover:bg-violet-500/5 text-muted-foreground hover:text-foreground transition-all"
+                  onClick={() => handleSubmit(s)}
+                  className="text-left text-xs px-4 py-3 rounded-xl border border-border/60 bg-card hover:bg-muted hover:border-primary/40 text-muted-foreground hover:text-foreground transition-all duration-200"
                 >
                   {s}
                 </button>
               ))}
             </div>
           </div>
-        )}
+        ) : (
+          <div className="px-4 py-6 space-y-6">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={cn(
+                  "flex gap-3",
+                  message.role === "user" ? "flex-row-reverse" : "flex-row"
+                )}
+              >
+                {/* Avatar */}
+                <div className={cn(
+                  "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold",
+                  message.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted border border-border text-muted-foreground"
+                )}>
+                  {message.role === "user" ? "S" : <Bot className="h-3.5 w-3.5" />}
+                </div>
 
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "flex gap-3 max-w-[85%]",
-              message.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
+                {/* Bubble */}
+                <div className={cn(
+                  "max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                  message.role === "user"
+                    ? "bg-primary text-primary-foreground rounded-tr-sm"
+                    : "bg-card border border-border/60 text-foreground rounded-tl-sm"
+                )}>
+                  {message.content ? (
+                    <p className="whitespace-pre-wrap wrap-break-word">{message.content}</p>
+                  ) : (
+                    <span className="flex gap-1 items-center py-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60 animate-bounce [animation-delay:0ms]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60 animate-bounce [animation-delay:150ms]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60 animate-bounce [animation-delay:300ms]" />
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {error && (
+              <div className="flex justify-center">
+                <div className="px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs max-w-sm text-center">
+                  ⚠ {error}
+                </div>
+              </div>
             )}
-          >
-            <div className={cn(
-              "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
-              message.role === "user"
-                ? "bg-linear-to-br from-violet-500 to-purple-600"
-                : "bg-muted border border-border"
-            )}>
-              {message.role === "user"
-                ? <User className="h-4 w-4 text-white" />
-                : <Bot className="h-4 w-4 text-muted-foreground" />
-              }
-            </div>
-            <div className={cn(
-              "rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
-              message.role === "user"
-                ? "bg-linear-to-br from-violet-500 to-purple-600 text-white rounded-tr-sm"
-                : "bg-muted text-foreground rounded-tl-sm border border-border/50"
-            )}>
-              {message.content || (
-                <span className="flex gap-1 items-center h-5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:300ms]" />
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
 
-        {error && (
-          <div className="mx-auto max-w-sm p-3 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm text-center">
-            {error}
+            <div ref={bottomRef} />
           </div>
         )}
-
-        <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-4 py-4 border-t border-border/50 bg-card/80">
-        <form onSubmit={handleSubmit} className="flex gap-2 items-center">
-          <Input
+      {/* Input area */}
+      <div className="px-4 pb-6 pt-3 border-t border-border/40">
+        <div className="relative flex items-end gap-2 bg-card border border-border/60 rounded-2xl px-4 py-3 focus-within:border-primary/50 transition-colors shadow-sm">
+          <textarea
+            ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Xabaringizni yozing..."
+            onChange={handleInput}
+            placeholder="Xabar yozing..."
             disabled={isLoading}
-            className="flex-1 rounded-xl border-border/60 bg-muted/50 focus-visible:ring-violet-500/50 h-11"
+            rows={1}
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 resize-none outline-none min-h-[24px] max-h-[160px] leading-6 disabled:opacity-50"
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) handleSubmit()
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                handleSubmit()
+              }
             }}
           />
-          <Button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="h-11 w-11 rounded-xl p-0 bg-linear-to-br from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-lg shadow-violet-500/25 transition-all disabled:opacity-50 disabled:shadow-none"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </form>
-        <p className="text-center text-xs text-muted-foreground/40 mt-2">Enter — yuborish</p>
+          {isLoading ? (
+            <Button
+              onClick={stopGeneration}
+              size="icon"
+              className="h-8 w-8 rounded-xl shrink-0 bg-muted hover:bg-muted/80 text-foreground border border-border"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              onClick={() => handleSubmit()}
+              disabled={!input.trim()}
+              size="icon"
+              className="h-8 w-8 rounded-xl shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        <p className="text-center text-[11px] text-muted-foreground/30 mt-2">
+          Enter — yuborish · Shift+Enter — yangi qator
+        </p>
       </div>
+
     </div>
   )
 }

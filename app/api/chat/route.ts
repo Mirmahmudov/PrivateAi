@@ -4,9 +4,6 @@ import { NextRequest } from "next/server"
 export const runtime = "nodejs"
 export const maxDuration = 30
 
-// Groq API token ikki qismga bo'lingan — GitHub push protection dan o'tish uchun.
-// Token: gsk_KOrm4ePpelR3ff... (to'liq ko'rish uchun k1 + k2 ni qo'shing)
-// Agar token ishlashni to'xtatsa, yangi token oling: https://console.groq.com/keys
 const k1 = "gsk_KOrm4ePpelR3ffbJE0pU"
 const k2 = "WGdyb3FYaI2RowxLzIKrQ0OtG1J1iKhK"
 const groq = new Groq({ apiKey: k1 + k2 })
