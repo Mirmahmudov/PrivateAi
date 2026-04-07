@@ -1,73 +1,66 @@
-import {
-  convertToModelMessages,
-  streamText,
-  UIMessage,
-} from "ai"
-import { createGroq } from "@ai-sdk/groq"
+import Groq from "groq-sdk"
+import { NextRequest } from "next/server"
 
+export const runtime = "nodejs"
 export const maxDuration = 30
 
-// Warn at module load time so it shows up in deployment logs immediately
-if (!process.env.GROQ_API_KEY) {
-  console.warn("[WARNING] GROQ_API_KEY is not set. Set it in your hosting platform's environment variables.")
-}
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+})
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!process.env.GROQ_API_KEY) {
+    return Response.json(
+      { error: "GROQ_API_KEY topilmadi. Vercel dashboard > Settings > Environment Variables ga qo'shing." },
+      { status: 500 }
+    )
+  }
+
   try {
-    // API kalitini tekshirish (xavfsizlik)
-    if (!process.env.GROQ_API_KEY) {
-      return new Response(
-        JSON.stringify({
-          error: "API kalit topilmadi. Iltimos, GROQ_API_KEY ni environment variables ga qo'shing. Bepul kalit olish: https://console.groq.com/keys",
-        }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      )
-    }
+    const { messages } = await req.json()
 
-    // Groq providerini yaratish
-    const groq = createGroq({
-      apiKey: process.env.GROQ_API_KEY,
-    })
-
-    // Foydalanuvchi xabarini qabul qilish
-    const { messages }: { messages: UIMessage[] } = await req.json()
-
-    // Xabarlarni tekshirish
     if (!messages || messages.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Xabar kiritilmagan" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      )
+      return Response.json({ error: "Xabar kiritilmagan" }, { status: 400 })
     }
 
-    // LLM API'ga yuborish va javobni qaytarish (Groq - bepul va tez)
-    const result = streamText({
-      model: groq("llama-3.3-70b-versatile"),
-      system: "Siz yordam beruvchi sun'iy intellekt yordamchisisiz. Har doim o'zbek va ingliz tillarida javob berishingiz mumkin. Foydalanuvchilarga do'stona va foydali javoblar bering.",
-      messages: await convertToModelMessages(messages),
-      abortSignal: req.signal,
+    const stream = await groq.chat.completions.create({
+      model: "llama3-8b-8192",
+      messages: [
+        {
+          role: "system",
+          content: "Siz yordam beruvchi AI yordamchisiz. O'zbek va ingliz tillarida javob bera olasiz.",
+        },
+        ...messages,
+      ],
+      stream: true,
+      max_tokens: 1024,
     })
 
-    return result.toUIMessageStreamResponse({
-      originalMessages: messages,
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of stream) {
+          const text = chunk.choices[0]?.delta?.content ?? ""
+          if (text) {
+            controller.enqueue(encoder.encode(text))
+          }
+        }
+        controller.close()
+      },
+    })
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "X-Content-Type-Options": "nosniff",
+      },
     })
   } catch (error) {
-    // Xatoliklarni ushlash
-    console.error("API xatosi:", error)
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Noma'lum xatolik yuz berdi",
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+    console.error("Groq API xatosi:", error)
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Noma'lum xatolik" },
+      { status: 500 }
     )
   }
 }
