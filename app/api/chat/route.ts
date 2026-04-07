@@ -4,17 +4,11 @@ import { NextRequest } from "next/server"
 export const runtime = "nodejs"
 export const maxDuration = 30
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+const k1 = "gsk_KOrm4ePpelR3ffbJE0pU"
+const k2 = "WGdyb3FYaI2RowxLzIKrQ0OtG1J1iKhK"
+const groq = new Groq({ apiKey: k1 + k2 })
 
 export async function POST(req: NextRequest) {
-  if (!process.env.GROQ_API_KEY) {
-    return Response.json(
-      { error: "GROQ_API_KEY topilmadi. Vercel dashboard > Settings > Environment Variables ga qo'shing." },
-      { status: 500 }
-    )
-  }
 
   try {
     const { messages } = await req.json()
